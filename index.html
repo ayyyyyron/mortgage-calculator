@@ -217,7 +217,25 @@
     color:var(--ink);
     font:600 15px Inter,sans-serif;
   }
-  #down-unit { width:auto; flex:none; border-left:1px solid var(--line); }
+  .down-units {
+    display:flex;
+    flex-wrap:wrap;
+    gap:4px 12px;
+    border:0;
+    margin:7px 0 0;
+    padding:0;
+    min-width:0;
+  }
+  .down-units label {
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    margin:0;
+    cursor:pointer;
+    white-space:nowrap;
+    min-height:24px;
+  }
+  .down-units input { margin:0; accent-color:var(--navy); }
   .inputwrap input { min-width:0; }
   .inputwrap:has([aria-invalid="true"]) { border-color:#a13c30; }
   .input-error { color:#8b3228; font-size:12px; line-height:1.5; }
@@ -255,11 +273,11 @@
       <label for="down">Down Payment</label>
       <div class="inputwrap">
         <input id="down" type="text" inputmode="decimal" value="20">
-        <select id="down-unit" aria-label="Down payment unit">
-          <option value="percent">%</option>
-          <option value="dollars">$</option>
-        </select>
       </div>
+      <fieldset class="down-units" aria-label="Down payment unit">
+        <label><input type="radio" name="down-unit" value="percent" checked><span>Percent (%)</span></label>
+        <label><input type="radio" name="down-unit" value="dollars"><span>Dollars ($)</span></label>
+      </fieldset>
     </div>
     <div class="field">
       <label for="rate">Interest Rate (%)</label>
@@ -341,8 +359,8 @@
     ['loan', 'principal', 'taxes', 'insurance', 'hoa', 'total']
       .map(id => [id, document.getElementById('out-' + id)])
   );
-  const downUnit = document.getElementById('down-unit');
-  let previousUnit = downUnit.value;
+  const downUnits = document.querySelector('.down-units');
+  let downUnit = downUnits.querySelector(':checked').value;
   const error = document.getElementById('input-error');
   const money = new Intl.NumberFormat('en-US', { style:'currency', currency:'USD' });
 
@@ -372,7 +390,7 @@
     const taxes = readAmount(inputs.taxes, true) / 12;
     const insurance = readAmount(inputs.insurance, true) / 12;
     const hoa = readAmount(inputs.hoa, true);
-    const inDollars = downUnit.value === 'dollars';
+    const inDollars = downUnit === 'dollars';
     const validPrice = price > 0 && Number.isFinite(price);
     const validDown = Number.isFinite(down) && down >= 0 &&
       (inDollars ? !validPrice || down <= price : down <= 100);
@@ -416,24 +434,25 @@
     show('total', invalid.length ? NaN : principal + taxes + insurance + hoa);
   }
 
-  downUnit.addEventListener('change', () => {
+  downUnits.addEventListener('change', event => {
+    const nextUnit = event.target.value;
     const price = readAmount(inputs.price, false);
     const down = readAmount(inputs.down, true);
     if (inputs.down.value.trim() && Number.isFinite(down)) {
       if (down === 0) {
         inputs.down.value = '0';
       } else if (Number.isFinite(price) && price > 0) {
-        const converted = previousUnit === 'percent' ? price * (down / 100) : (down / price) * 100;
+        const converted = downUnit === 'percent' ? price * (down / 100) : (down / price) * 100;
         if (Number.isFinite(converted)) {
           inputs.down.value = converted.toLocaleString('en-US', {
-            maximumFractionDigits: downUnit.value === 'dollars' ? 2 : 8
+            maximumFractionDigits: nextUnit === 'dollars' ? 2 : 8
           });
         }
       } else {
         inputs.down.value = '';
       }
     }
-    previousUnit = downUnit.value;
+    downUnit = nextUnit;
     calculate();
   });
   for (const input of Object.values(inputs)) input.addEventListener('input', calculate);
