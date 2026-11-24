@@ -238,6 +238,8 @@
   .down-units input { margin:0; accent-color:var(--navy); }
   .inputwrap input { min-width:0; }
   .inputwrap:has([aria-invalid="true"]) { border-color:#a13c30; }
+  .rate-source { margin:6px 0 0; font-size:11px; line-height:1.4; color:var(--slate); }
+  .rate-source a { color:inherit; }
   .input-error { color:#8b3228; font-size:12px; line-height:1.5; }
   .line { gap:8px; }
   .line .amt { text-align:right; overflow-wrap:anywhere; }
@@ -283,10 +285,10 @@
       <label for="rate">Interest Rate (%)</label>
       <div class="inputwrap">
         
-        <input id="rate" type="text" inputmode="decimal" value="7.5">
+        <input id="rate" aria-describedby="rate-source" type="text" inputmode="decimal" value="7.25">
         <span class="suffix" aria-hidden="true">%</span>
       </div>
-    </div>
+    <p id="rate-source" class="rate-source"></p></div>
     </div>
     <div class="field">
       <label for="term">Loan Term</label>
@@ -362,6 +364,14 @@
   const downUnits = document.querySelector('.down-units');
   let downUnit = downUnits.querySelector(':checked').value;
   const error = document.getElementById('input-error');
+  const rateSource = document.getElementById('rate-source');
+  const verifiedQuote = {"rate":7.25,"asOf":"2026-11-23"};
+  let rateEdited = false;
+  inputs.rate.addEventListener('input', () => {
+    rateEdited = true;
+    rateSource.hidden = true;
+    inputs.rate.removeAttribute('aria-describedby');
+  });
   const money = new Intl.NumberFormat('en-US', { style:'currency', currency:'USD' });
 
   function readAmount(input, optional) {
@@ -420,6 +430,7 @@
       const showError = !valid && (id !== 'rate' || inputs.rate.value.trim() !== '');
       inputs[id].setAttribute('aria-invalid', String(showError));
       if (showError) inputs[id].setAttribute('aria-describedby', 'input-error');
+      else if (id === 'rate' && !rateEdited) inputs[id].setAttribute('aria-describedby', 'rate-source');
       else inputs[id].removeAttribute('aria-describedby');
     }
     const message = invalid.filter(id => id !== 'rate' || inputs.rate.value.trim())
@@ -456,7 +467,38 @@
     calculate();
   });
   for (const input of Object.values(inputs)) input.addEventListener('input', calculate);
+  function showQuote(quote) {
+    const sourceLink = document.createElement('a');
+    sourceLink.href = 'https://www.wellsfargo.com/mortgage/rates/';
+    sourceLink.textContent = 'Wells Fargo';
+    const date = new Intl.DateTimeFormat('en-US', {
+      month:'short', day:'numeric', year:'numeric', timeZone:'UTC'
+    }).format(new Date(quote.asOf));
+    rateSource.replaceChildren(sourceLink, ' 30-year fixed purchase sample, ' + date + '.');
+    rateSource.hidden = false;
+  }
+
+  async function loadWeeklyRate() {
+    try {
+      const url = 'https://raw.githubusercontent.com/ayyyyyron/mortgage-calculator/main/mortgage-rate.json';
+      const response = await fetch(url, { signal:AbortSignal.timeout(4500) });
+      if (!response.ok) return;
+      const quote = await response.json();
+      const date = new Date(quote.asOf);
+      if (rateEdited || document.activeElement === inputs.rate ||
+          !Number.isFinite(quote.rate) || quote.rate <= 0 || quote.rate >= 25 ||
+          !Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== quote.asOf ||
+          quote.asOf < verifiedQuote.asOf || date.getTime() > Date.now() + 86400000) return;
+      inputs.rate.value = String(quote.rate);
+      showQuote(quote);
+      calculate();
+    } catch {
+      // The dated, last verified quote is already displayed.
+    }
+  }
+  showQuote(verifiedQuote);
   calculate();
+  loadWeeklyRate();
 </script>
 </body>
 </html>
